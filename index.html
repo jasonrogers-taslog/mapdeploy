@@ -18,7 +18,7 @@
     <script src="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.js"></script>
 
     <script>
-        var map, datasource;
+        var map, datasource, drawingManager;
 
         function GetMap() {
             //Initialize a map instance.
@@ -48,10 +48,23 @@
             //Wait until the map resources are ready.
             map.events.add('ready', function () {
 
+                drawingManager = new atlas.drawing.DrawingManager(map, {
+                    toolbar: new atlas.control.DrawingToolbar({
+                        buttons: ['draw-line', 'draw-polygon', 'draw-rectangle', 'draw-circle', 'edit-geometry'],
+                        position: 'top-right',
+                        style: 'light'
+                    })
+                });
+
                 //Create a data source and add it to the map.
                 datasource = new atlas.source.DataSource();
                 map.sources.add(datasource);
 
+                map.events.add('drawingmodechanged', drawingManager, drawingModeChanged);
+                 //Monitor for when a polygon drawing has been completed.
+                 map.events.add('drawingchanging', drawingManager, measureShape);    //Fires when in shape preview is shown.
+                map.events.add('drawingchanged', drawingManager, measureShape);     //Fires when the shape has changed.
+                map.events.add('drawingcomplete', drawingManager, drawingComplete); //Fires when drawing is completed.
                 //Create a point feature and add it to the data source.
                 datasource.add(new atlas.data.Feature(new atlas.data.Point([122.258299,  6.7326782]), { 'title': 'LINONGAN', 'subtitle': '106' }));
 datasource.add(new atlas.data.Feature(new atlas.data.Point([122.221425,  6.4557418]), { 'title': 'LOOKBISAYA (KAULUNGAN ISLAND)', 'subtitle': '114' }));
@@ -2037,11 +2050,66 @@ datasource.add(new atlas.data.Feature(new atlas.data.Point([125.6915355,  9.5295
                 }));
             });
         }
+
+        function drawingModeChanged(mode) {
+            //Clear the drawing canvas when the user enters into a drawing mode.
+            if (mode.startsWith('draw')) {
+                drawingManager.getSource().clear();
+                document.getElementById('measurementInfo').innerHTML = '';
+            }
+        }
+
+        function drawingComplete(shape) {
+            //Exit drawing mode.
+            drawingManager.setOptions({ mode: 'idle' });
+
+            measureShape(shape);
+        }
+
+        function measureShape(shape) {
+            var msg = '';
+            
+            //If the search area is a circle, create a polygon from its circle coordinates.
+            if (shape.isCircle()) {
+                var r = atlas.math.convertDistance(shape.getProperties().radius, 'meters', 'miles', 2);
+                var a = Math.round(2 * Math.PI * r * r * 100) / 100;
+                var p = Math.round(2 * Math.PI * r * 100) / 100;
+
+                msg = `Radius: ${r} mi<br/>Area: ${a} sq mi<br/>Perimeter: ${p} mi`;
+            } else {
+                var g = shape.toJson().geometry;
+                var polygon;
+
+                switch (shape.getType()) {
+                    case 'LineString':
+                        var l = Math.round(atlas.math.getLengthOfPath(g.coordinates, 'miles') * 100) / 100;
+                        msg += `Length: ${l} mi`;
+
+                        //Polygon's are rendered as lines when initially being drawn. 
+                        if (drawingManager.getOptions().mode === 'draw-polygon') {
+                            polygon = new atlas.data.Polygon(g.coordinates);
+                        }
+                        break;
+                    case 'Polygon':
+                        polygon = g;
+
+                        var p = Math.round(atlas.math.getLengthOfPath(g.coordinates[0], 'miles') * 100) / 100;
+                        msg = `Perimeter: ${p} mi`;
+                        break;
+                }   
+
+                if (polygon) {
+                    msg += `<br/>Area: ${atlas.math.getArea(polygon, 'squareMiles', 2)} sq mi`;
+                }
+            }
+
+            document.getElementById('measurementInfo').innerHTML = msg;
+        }
     </script>
 </head>
 <body onload="GetMap()">
     <div id="myMap" style="position:relative;width:100%;min-width:290px;height:100%;"></div>
-
+    <div id="measurementInfo" style="position:absolute;top:10px;left:10px;background-color:white;border-radius:10px;padding:10px;"></div>
     
 </body>
 </html>
