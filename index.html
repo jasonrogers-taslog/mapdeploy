@@ -17,6 +17,10 @@
     
     <script src="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.js"></script>
 
+     <!-- Add references to the Azure Maps Map Drawing Tools JavaScript and CSS files. -->
+     <link rel="stylesheet" href="https://atlas.microsoft.com/sdk/javascript/drawing/1/atlas-drawing.min.css" type="text/css" />
+     <script src="https://atlas.microsoft.com/sdk/javascript/drawing/1/atlas-drawing.min.js"></script>
+ 
     <script>
         var map, datasource, drawingManager;
 
@@ -30,7 +34,7 @@
                 //Add authentication details for connecting to Azure Maps.
                 authOptions: {
                     //Use Azure Active Directory authentication.
-                    /* authType: 'subscriptionKey',
+                    /*authType: 'subscriptionKey',
                     subscriptionKey: 'QJiMD63i6uN6nQ656ZKzLbJxfLG1F4bNonXrN7ODG_4', //Your Azure Maps client id for accessing your Azure Maps account.
                     getToken: function (resolve, reject, map) {
                         //URL to your authentication service that retrieves an Azure Active Directory Token.
@@ -41,7 +45,8 @@
 
                     //Alternatively, use an Azure Maps key. Get an Azure Maps key at https://azure.com/maps. NOTE: The primary key should be used as the key.
                     authType: 'subscriptionKey',
-                    subscriptionKey: 'QJiMD63i6uN6nQ656ZKzLbJxfLG1F4bNonXrN7ODG_4'
+                    subscriptionKey: 'QJiMD63i6uN6nQ656ZKzLbJxfLG1F4bNonXrN7ODG_4',
+			clientId: '7066a0a1-b9de-45f5-9aa5-d03f0f202135'
                 }
             });
 
@@ -2025,8 +2030,18 @@ datasource.add(new atlas.data.Feature(new atlas.data.Point([123.824381,  7.72436
 datasource.add(new atlas.data.Feature(new atlas.data.Point([125.7079231,  9.4479738]), { 'title': 'CAMAM-ONAN', 'subtitle': '72' }));
 datasource.add(new atlas.data.Feature(new atlas.data.Point([125.6915355,  9.5295304]), { 'title': 'MAHANUB', 'subtitle': '40' }));
 
-
-
+                drawingManager = new atlas.drawing.DrawingManager(map, {
+                    toolbar: new atlas.control.DrawingToolbar({
+                        buttons: ['draw-line', 'draw-polygon', 'draw-rectangle', 'draw-circle', 'edit-geometry'],
+                        position: 'top-right',
+                        style: 'light'
+                    })
+                });
+                map.events.add('drawingmodechanged', drawingManager, drawingModeChanged);
+                 //Monitor for when a polygon drawing has been completed.
+                 map.events.add('drawingchanging', drawingManager, measureShape);    //Fires when in shape preview is shown.
+                map.events.add('drawingchanged', drawingManager, measureShape);     //Fires when the shape has changed.
+                map.events.add('drawingcomplete', drawingManager, drawingComplete); //Fires when drawing is completed.
                 //Add a layer for rendering point data as symbols.
                 map.layers.add(new atlas.layer.SymbolLayer(datasource, null, {
                     textOptions: {
@@ -2071,19 +2086,19 @@ datasource.add(new atlas.data.Feature(new atlas.data.Point([125.6915355,  9.5295
             
             //If the search area is a circle, create a polygon from its circle coordinates.
             if (shape.isCircle()) {
-                var r = atlas.math.convertDistance(shape.getProperties().radius, 'meters', 'miles', 2);
+                var r = atlas.math.convertDistance(shape.getProperties().radius, 'meters', 'kilometers', 2);
                 var a = Math.round(2 * Math.PI * r * r * 100) / 100;
                 var p = Math.round(2 * Math.PI * r * 100) / 100;
 
-                msg = `Radius: ${r} mi<br/>Area: ${a} sq mi<br/>Perimeter: ${p} mi`;
+                msg = `Radius: ${r} kms<br/>Area: ${a} sq kms<br/>Perimeter: ${p} kms`;
             } else {
                 var g = shape.toJson().geometry;
                 var polygon;
 
                 switch (shape.getType()) {
                     case 'LineString':
-                        var l = Math.round(atlas.math.getLengthOfPath(g.coordinates, 'miles') * 100) / 100;
-                        msg += `Length: ${l} mi`;
+                        var l = Math.round(atlas.math.getLengthOfPath(g.coordinates, 'kilometers') * 100) / 100;
+                        msg += `Length: ${l} kms`;
 
                         //Polygon's are rendered as lines when initially being drawn. 
                         if (drawingManager.getOptions().mode === 'draw-polygon') {
@@ -2093,13 +2108,13 @@ datasource.add(new atlas.data.Feature(new atlas.data.Point([125.6915355,  9.5295
                     case 'Polygon':
                         polygon = g;
 
-                        var p = Math.round(atlas.math.getLengthOfPath(g.coordinates[0], 'miles') * 100) / 100;
-                        msg = `Perimeter: ${p} mi`;
+                        var p = Math.round(atlas.math.getLengthOfPath(g.coordinates[0], 'squareKilometers') * 100) / 100;
+                        msg = `Perimeter: ${p} kms`;
                         break;
                 }   
 
                 if (polygon) {
-                    msg += `<br/>Area: ${atlas.math.getArea(polygon, 'squareMiles', 2)} sq mi`;
+                    msg += `<br/>Area: ${atlas.math.getArea(polygon, 'squareKilometers', 2)} sq kms`;
                 }
             }
 
